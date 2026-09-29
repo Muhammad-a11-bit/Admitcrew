@@ -1,0 +1,137 @@
+{
+  "name": "02 \u2014 AdmitCrew Quiet Student Reminder Drafts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "4fb20ff4-f19c-44a4-a5ad-0c06e6a4f503",
+      "name": "Run every day at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/quiet-leads?days_quiet=3",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "81dca68f-1256-4e01-a9e1-c99f0044cb4d",
+      "name": "Find students quiet for 3 days",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        230,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().flatMap(item => {\n const rows=Array.isArray(item.json)?item.json:[item.json];\n return rows.map(lead=>({json:{lead_id:lead.id,channel:'website',kind:'follow_up',body:`Hi ${(lead.name||'there').split(' ')[0]}, just checking in on your study abroad plans. Reply here if you would like help reviewing suitable programs or next steps.`}}));\n});"
+      },
+      "id": "180a7b70-93ee-4aa5-b81d-885ecbe1b3dc",
+      "name": "Write reminder drafts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/reminders/draft",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "820b37b2-38e6-4d67-9e1e-7bc8876ef0ff",
+      "name": "Queue reminder for staff approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Run every day at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Find students quiet for 3 days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find students quiet for 3 days": {
+      "main": [
+        [
+          {
+            "node": "Write reminder drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write reminder drafts": {
+      "main": [
+        [
+          {
+            "node": "Queue reminder for staff approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "d6810531-ea73-4105-af64-9c75e8c0042f"
+}

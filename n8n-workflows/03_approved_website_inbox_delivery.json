@@ -1,0 +1,136 @@
+{
+  "name": "03 \u2014 AdmitCrew Approved Website Inbox Delivery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "c00b250c-f06e-44de-a7ee-d42b573a88e1",
+      "name": "Poll approved messages every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/approved-messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6db7c410-f076-487f-b34a-0a248d4ee900",
+      "name": "Get staff-approved messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        230,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().flatMap(i=>Array.isArray(i.json)?i.json.map(x=>({json:x})):(i.json&&Object.keys(i.json).length?[{json:i.json}]:[]));"
+      },
+      "id": "2d36dcae-855d-47fe-aa25-6e0838928705",
+      "name": "Expand approved messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/messages/{{$json.id}}/mark-sent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}"
+      },
+      "id": "56fed02a-d7f2-4913-ad5d-ed007dcc3743",
+      "name": "Release to student inbox once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Poll approved messages every minute": {
+      "main": [
+        [
+          {
+            "node": "Get staff-approved messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get staff-approved messages": {
+      "main": [
+        [
+          {
+            "node": "Expand approved messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand approved messages": {
+      "main": [
+        [
+          {
+            "node": "Release to student inbox once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "9e421aba-e900-490c-9b80-0c7771237cf1"
+}

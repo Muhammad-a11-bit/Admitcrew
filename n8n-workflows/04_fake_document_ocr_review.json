@@ -1,0 +1,246 @@
+{
+  "name": "04 \u2014 AdmitCrew Fake Document OCR Review",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "7194e478-8d90-4ecb-864c-c1f0484474c8",
+      "name": "Poll pending fake documents every 2 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/documents/pending",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bfb8352d-499c-4a21-b8e8-5003d5b1fa93",
+      "name": "Find documents awaiting OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().flatMap(i=>Array.isArray(i.json)?i.json.map(x=>({json:x})):(i.json&&Object.keys(i.json).length?[{json:i.json}]:[]));"
+      },
+      "id": "3cd9d1e3-4684-48e2-90bc-faad238ab311",
+      "name": "One item per document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/documents/{{$json.id}}/file",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "233a69ff-f726-448b-8066-d48daedeb851",
+      "name": "Download fake test document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-goog-api-key",
+              "value": "={{$env.GEMINI_API_KEY}}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({contents:[{parts:[{text:\"Extract fields visible in this student document. Do not guess missing or unreadable values. Return only JSON with keys name_on_document (string or null), expiry_date (YYYY-MM-DD or null), marks (string or null), ielts_score (string or null), and notes (short string or null).\"},{inline_data:{mime_type:$('One item per document').item.json.filename.toLowerCase().endsWith('.pdf')?'application/pdf':$('One item per document').item.json.filename.toLowerCase().endsWith('.png')?'image/png':'image/jpeg',data:$binary.data.data}}]}],generationConfig:{responseMimeType:'application/json'}}) }}"
+      },
+      "id": "bde92985-ea97-41db-8108-968d507a4718",
+      "name": "Extract fields with Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const doc=$('One item per document').item.json;\nconst raw=($json.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').trim();\nlet fields={}; try { fields=JSON.parse(raw.replace(/^```json\\s*/i,'').replace(/```$/,'').trim()); } catch { fields={name_on_document:null,expiry_date:null,marks:null,ielts_score:null,notes:'OCR result could not be parsed; staff review required.'}; }\nreturn {json:{document_id:doc.id,...fields}};"
+      },
+      "id": "92f12d24-9ec7-4a59-b4c4-1d446767fd19",
+      "name": "Prepare document review result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ADMITCREW_API_BASE_URL}}/api/n8n/documents/{{$json.document_id}}/review",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Key",
+              "value": "={{$env.ADMITCREW_N8N_KEY}}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({name_on_document:$json.name_on_document,expiry_date:$json.expiry_date,marks:$json.marks,ielts_score:$json.ielts_score,notes:$json.notes}) }}"
+      },
+      "id": "e0188306-35e5-42c7-9d6b-7b994b366526",
+      "name": "Save review result for staff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Poll pending fake documents every 2 minutes": {
+      "main": [
+        [
+          {
+            "node": "Find documents awaiting OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find documents awaiting OCR": {
+      "main": [
+        [
+          {
+            "node": "One item per document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per document": {
+      "main": [
+        [
+          {
+            "node": "Download fake test document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download fake test document": {
+      "main": [
+        [
+          {
+            "node": "Extract fields with Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields with Gemini": {
+      "main": [
+        [
+          {
+            "node": "Prepare document review result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare document review result": {
+      "main": [
+        [
+          {
+            "node": "Save review result for staff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "a58c1091-bab9-4eaa-be6e-dd1e136636d3"
+}
